@@ -142,7 +142,7 @@ namespace MetaboyApi.Controllers
                 {
                     await db.OpenAsync();
                     var canClaim = new { Address = address };
-                    var canClaimSql = "select case when b.claimeddate is null then 'True' else 'False' End as Redeemable, a.nftdata, a.Amount from allowlist a left join claimed b on a.address = b.address and a.nftdata = b.nftdata where a.address = @Address and a.nftdata in (select nftdata from claimable) and b.claimeddate is null";
+                    var canClaimSql = "SELECT CASE WHEN b.claimeddate IS NULL THEN 'True' ELSE 'False' END AS Redeemable, c.nftdata, a.Amount FROM claimable cLEFT JOIN claimed b ON c.nftdata = b.nftdata AND b.address = @Address WHERE b.claimeddate IS NULL";
                     var canClaimResult = await db.QueryAsync<CanClaimV2>(canClaimSql, canClaim);
                     if (canClaimResult.Count() > 0)
                     {
