@@ -67,34 +67,28 @@ namespace MetaboyApi.Controllers
                 using (SqlConnection db = new System.Data.SqlClient.SqlConnection(AzureSqlServerConnectionString))
                 {
                     await db.OpenAsync();
-                    foreach(NftReciever nftReciever in nftRecievers)
+                    foreach (NftReciever nftReciever in nftRecievers)
                     {
                         var claimableParameters = new { NftData = nftReciever.NftData };
                         var claimableSql = "select * from claimable where nftdata = @NftData";
                         var claimableResult = await db.QueryAsync<Claimable>(claimableSql, claimableParameters);
                         if (claimableResult.Count() == 1)
                         {
-                            var allowListParameters = new { Address = nftReciever.Address, NftData = nftReciever.NftData };
-                            var allowListSql = "select * from allowlist where nftdata = @NftData and address = @Address";
-                            var allowListResult = await db.QueryAsync<AllowList>(allowListSql, allowListParameters);
-                            if (allowListResult.Count() == 1)
+                            var claimedListParameters = new { Address = nftReciever.Address, NftData = nftReciever.NftData };
+                            var claimedListSql = "select * from claimed where nftdata = @NftData and address = @Address";
+                            var claimedListResult = await db.QueryAsync<Claimed>(claimedListSql, claimedListParameters);
+                            if (claimedListResult.Count() == 0)
                             {
-                                var claimedListParameters = new { Address = nftReciever.Address, NftData = nftReciever.NftData };
-                                var claimedListSql = "select * from claimed where nftdata = @NftData and address = @Address";
-                                var claimedListResult = await db.QueryAsync<Claimed>(claimedListSql, claimedListParameters);
-                                if (claimedListResult.Count() == 0)
+                                // try adding a message to the batch
+                                if (!messageBatch.TryAddMessage(new ServiceBusMessage($"{JsonSerializer.Serialize(nftReciever)}")))
                                 {
-                                    // try adding a message to the batch
-                                    if (!messageBatch.TryAddMessage(new ServiceBusMessage($"{JsonSerializer.Serialize(nftReciever)}")))
-                                    {
-                                        // if it is too large for the batch
-                                        throw new Exception($"The message is too large to fit in the batch.");
-                                    }
+                                    // if it is too large for the batch
+                                    throw new Exception($"The message is too large to fit in the batch.");
                                 }
                             }
+
                         }
                     }
- 
                 }
 
                 if (messageBatch.Count > 0)
@@ -114,7 +108,7 @@ namespace MetaboyApi.Controllers
                     }
                     return Ok("Request added...");
                 }
-                else 
+                else
                 {
                     return BadRequest("Request not added...");
                 }
@@ -147,7 +141,7 @@ namespace MetaboyApi.Controllers
                 using (SqlConnection db = new System.Data.SqlClient.SqlConnection(AzureSqlServerConnectionString))
                 {
                     await db.OpenAsync();
-                    var canClaim = new { Address = address};
+                    var canClaim = new { Address = address };
                     var canClaimSql = "select case when b.claimeddate is null then 'True' else 'False' End as Redeemable, a.nftdata, a.Amount from allowlist a left join claimed b on a.address = b.address and a.nftdata = b.nftdata where a.address = @Address and a.nftdata in (select nftdata from claimable) and b.claimeddate is null";
                     var canClaimResult = await db.QueryAsync<CanClaimV2>(canClaimSql, canClaim);
                     if (canClaimResult.Count() > 0)
